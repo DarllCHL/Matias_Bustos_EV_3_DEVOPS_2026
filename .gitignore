@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.npm/
+*.pem
+.env
+.aws/
+Thumbs.db
+Desktop.ini
