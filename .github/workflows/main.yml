@@ -7,59 +7,11 @@ on:
 
 jobs:
 # ─────────────────────────────────────────────
-  # 1. Análisis de seguridad con Snyk (Node.js)
-  # ─────────────────────────────────────────────
-  snyk-scan:
-    name: Snyk Security Scan
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install backend dependencies
-        working-directory: tienda-tech-backend
-        run: npm install
-
-      - name: Auditoría de dependencias con npm audit
-        working-directory: tienda-tech-backend
-        run: npm audit --audit-level=high || true
-
-      - name: Install Snyk CLI
-        run: npm install -g snyk
-
-      - name: Snyk test Node.js dependencies
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN_3 }}
-        working-directory: tienda-tech-backend
-        run: snyk test --severity-threshold=high
-
-      - name: Generate Snyk JSON Report
-        if: always()
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN_3 }}
-        working-directory: tienda-tech-backend
-        run: snyk test --json > ../snyk-report.json || true
-
-      - name: Upload Snyk JSON Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: snyk-report
-          path: snyk-report.json
-          
-  # ─────────────────────────────────────────────
-  # 2. Tests del backend con MySQL en Actions
-  # ─────────────────────────────────────────────
+# 1. Tests del backend con MySQL en Actions
+# ─────────────────────────────────────────────
   test:
     name: Run Backend Tests
     runs-on: ubuntu-latest
-    needs: snyk-scan
 
     services:
       mysql:
@@ -111,13 +63,61 @@ jobs:
           PORT: 3001
         run: npm test
 
-  # ─────────────────────────────────────────────
-  # 3. Análisis de calidad con SonarCloud
-  # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# 2. Análisis de seguridad con Snyk (Node.js) -> Depende de test
+# ─────────────────────────────────────────────
+  snyk-scan:
+    name: Snyk Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install backend dependencies
+        working-directory: tienda-tech-backend
+        run: npm install
+
+      - name: Auditoría de dependencias con npm audit
+        working-directory: tienda-tech-backend
+        run: npm audit --audit-level=high || true
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Snyk test Node.js dependencies
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN_3_EV_3_MATIAS_BUSTOS }}
+        working-directory: tienda-tech-backend
+        run: snyk test --severity-threshold=high
+
+      - name: Generate Snyk JSON Report
+        if: always()
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN_3_EV_3_MATIAS_BUSTOS }}
+        working-directory: tienda-tech-backend
+        run: snyk test --json > ../snyk-report.json || true
+
+      - name: Upload Snyk JSON Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-report
+          path: snyk-report.json
+
+# ─────────────────────────────────────────────
+# 3. Análisis de calidad con SonarCloud -> Depende de snyk-scan
+# ─────────────────────────────────────────────
   sonar-analysis:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
-    needs: test
+    needs: snyk-scan
 
     steps:
       - name: Checkout code
@@ -129,7 +129,7 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_3 }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_4_DEVOPS_EV_3_MATIAS_BUSTOS }}
           SONAR_HOST_URL: https://sonarcloud.io
         with:
           args: >
@@ -139,9 +139,9 @@ jobs:
             -Dsonar.exclusions=**/node_modules/**
             -Dsonar.cpd.exclusions=**/server.test.js
 
-  # ─────────────────────────────────────────────
-  # 4. Build de imágenes Docker
-  # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# 4. Build de imágenes Docker -> Depende de sonar-analysis
+# ─────────────────────────────────────────────
   build:
     name: Build Docker Images
     runs-on: ubuntu-latest
@@ -173,58 +173,304 @@ jobs:
             backend-image.tar.gz
             frontend-image.tar.gz
 
-  # ─────────────────────────────────────────────
-  # 5. Deploy con Docker Compose (self-hosted)
-  # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# 5. Deploy con Docker Compose en AWS EC2 (Amazon Linux) -> Depende de build
+# ─────────────────────────────────────────────
   deploy:
-    name: Deploy with Docker Compose
-    runs-on: self-hosted
+    name: Deploy with Docker Compose to AWS EC2
+    runs-on: ubuntu-latest
     needs: build
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Limpiar contenedores anteriores
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'SilentlyContinue'
-          docker rm -f tienda-tech-frontend 2>&1 | Out-Null
-          docker rm -f tienda-tech-backend 2>&1 | Out-Null
-          docker rm -f tienda-tech-db 2>&1 | Out-Null
-          docker compose down --remove-orphans 2>&1 | Out-Null
-          $LASTEXITCODE = 0
-          exit 0
+      - name: Ejecutar comandos remotos en AWS por SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AWS_EC2_HOST_MATIAS_BUSTOS }}
+          username: ${{ secrets.AWS_EC2_USER_MATIAS_BUSTOS }}
+          key: ${{ secrets.AWS_EC2_SSH_KEY_MATIAS_BUSTOS }}
+          script: |
+            # 1. Crear o moverse al directorio del proyecto en la instancia
+            if [ ! -d "EVALUACION_DEVOPS_2026_2" ]; then
+              git clone https://github.com/${{ github.repository }}.git EVALUACION_DEVOPS_2026_2
+              cd EVALUACION_DEVOPS_2026_2
+            else
+              cd EVALUACION_DEVOPS_2026_2
+              git pull origin main
+            fi
 
-      - name: Build y levantar servicios
-        shell: powershell
-        run: docker compose up --build -d
+            # 2. Detener y limpiar contenedores huerfanos anteriores
+            echo "🛑 Deteniendo servicios anteriores..."
+            docker compose down --remove-orphans
 
-      - name: Esperar a que los servicios inicien
-        shell: powershell
-        run: Start-Sleep -Seconds 25
+            # 3. Levantar los microservicios compilándolos localmente en AWS
+            echo "🚀 Levantando nuevos contenedores..."
+            docker compose up --build -d
 
-      - name: Verificar contenedores en ejecución
-        shell: powershell
-        run: |
-          docker compose ps
-          docker compose logs backend
-          docker compose logs frontend
+            # 4. Esperar a que los servicios estabilicen
+            echo "⏳ Esperando 25 segundos a que estabilice el sistema..."
+            sleep 25
 
-      - name: Health check del backend
-        shell: powershell
-        run: |
-          $response = $null
-          try {
-            $response = Invoke-WebRequest -Uri "http://localhost:3001/api/health" -UseBasicParsing
-          } catch {
-            Write-Host "❌ Health check falló"
-            docker compose logs backend
-            exit 1
-          }
-          if ($response.StatusCode -ne 200) {
-            Write-Host "❌ Health check falló con status $($response.StatusCode)"
-            docker compose logs backend
-            exit 1
-          }
-          Write-Host "✅ Health check OK ."
+            # 5. Verificar contenedores en ejecución
+            echo "📊 Estado de los contenedores:"
+            docker compose ps
+            
+            echo "📝 Últimos logs del Backend:"
+            docker compose logs backend --tail=20
+
+            # 6. Health check robusto usando curl
+            echo "🔍 Realizando Health Check local en el servidor..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/health)
+            
+            if [ "$HTTP_STATUS" -ne 200 ]; then
+              echo "❌ El Health check falló con estado HTTP: $HTTP_STATUS"
+              docker compose logs backend
+              exit 1
+            else
+              echo "✅ Health check exitoso (HTTP $HTTP_STATUS). ¡Producción actualizada y andando!"
+            fi
+
+
+
+
+
+
+
+
+
+
+
+
+
+# name: Tienda Tech CI/CD Pipeline
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+# # ─────────────────────────────────────────────
+#   # 1. Análisis de seguridad con Snyk (Node.js)
+#   # ─────────────────────────────────────────────
+#   snyk-scan:
+#     name: Snyk Security Scan
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Set up Node.js 18
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '18'
+
+#       - name: Install backend dependencies
+#         working-directory: tienda-tech-backend
+#         run: npm install
+
+#       - name: Auditoría de dependencias con npm audit
+#         working-directory: tienda-tech-backend
+#         run: npm audit --audit-level=high || true
+
+#       - name: Install Snyk CLI
+#         run: npm install -g snyk
+
+#       - name: Snyk test Node.js dependencies
+#         env:
+#           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN_3 }}
+#         working-directory: tienda-tech-backend
+#         run: snyk test --severity-threshold=high
+
+#       - name: Generate Snyk JSON Report
+#         if: always()
+#         env:
+#           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN_3 }}
+#         working-directory: tienda-tech-backend
+#         run: snyk test --json > ../snyk-report.json || true
+
+#       - name: Upload Snyk JSON Report
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: snyk-report
+#           path: snyk-report.json
+          
+#   # ─────────────────────────────────────────────
+#   # 2. Tests del backend con MySQL en Actions
+#   # ─────────────────────────────────────────────
+#   test:
+#     name: Run Backend Tests
+#     runs-on: ubuntu-latest
+#     needs: snyk-scan
+
+#     services:
+#       mysql:
+#         image: mysql:8
+#         env:
+#           MYSQL_ROOT_PASSWORD: admin123
+#           MYSQL_DATABASE: tienda_tecnologica
+#           MYSQL_USER: alumno
+#           MYSQL_PASSWORD: alumno123
+#         ports:
+#           - 3306:3306
+#         options: >-
+#           --health-cmd="mysqladmin ping -h localhost -u alumno -palumno123"
+#           --health-interval=10s
+#           --health-timeout=5s
+#           --health-retries=10
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Set up Node.js 18
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '18'
+
+#       - name: Install backend dependencies
+#         working-directory: tienda-tech-backend
+#         run: npm install
+
+#       - name: Esperar a que MySQL esté listo
+#         run: |
+#           until mysqladmin ping -h 127.0.0.1 -u alumno -palumno123 --silent; do
+#             echo "Esperando MySQL..."
+#             sleep 2
+#           done
+
+#       - name: Importar schema de la base de datos
+#         run: mysql -h 127.0.0.1 -u alumno -palumno123 tienda_tecnologica < tienda-tech-db/init.sql
+
+#       - name: Ejecutar tests
+#         working-directory: tienda-tech-backend
+#         env:
+#           DB_HOST: 127.0.0.1
+#           DB_USER: alumno
+#           DB_PASSWORD: alumno123
+#           DB_NAME: tienda_tecnologica
+#           DB_PORT: 3306
+#           PORT: 3001
+#         run: npm test
+
+#   # ─────────────────────────────────────────────
+#   # 3. Análisis de calidad con SonarCloud
+#   # ─────────────────────────────────────────────
+#   sonar-analysis:
+#     name: SonarCloud Analysis
+#     runs-on: ubuntu-latest
+#     needs: test
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+
+#       - name: SonarCloud Scan
+#         uses: SonarSource/sonarqube-scan-action@v6
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_3 }}
+#           SONAR_HOST_URL: https://sonarcloud.io
+#         with:
+#           args: >
+#             -Dsonar.projectKey=darllchl_evaluacion_devops_2026_2
+#             -Dsonar.organization=darllchl
+#             -Dsonar.sources=tienda-tech-backend/server.js,tienda-tech-frontend
+#             -Dsonar.exclusions=**/node_modules/**
+#             -Dsonar.cpd.exclusions=**/server.test.js
+
+#   # ─────────────────────────────────────────────
+#   # 4. Build de imágenes Docker
+#   # ─────────────────────────────────────────────
+#   build:
+#     name: Build Docker Images
+#     runs-on: ubuntu-latest
+#     needs: sonar-analysis
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Build imagen backend
+#         run: docker build -t tienda-tech-backend:latest ./tienda-tech-backend
+
+#       - name: Build imagen frontend
+#         run: docker build -t tienda-tech-frontend:latest ./tienda-tech-frontend
+
+#       - name: Build imagen db
+#         run: docker build -t tienda-tech-db:latest ./tienda-tech-db
+
+#       - name: Guardar imágenes como artifact
+#         run: |
+#           docker save tienda-tech-backend:latest | gzip > backend-image.tar.gz
+#           docker save tienda-tech-frontend:latest | gzip > frontend-image.tar.gz
+
+#       - name: Upload Docker image artifacts
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: docker-images
+#           path: |
+#             backend-image.tar.gz
+#             frontend-image.tar.gz
+
+#   # ─────────────────────────────────────────────
+#   # 5. Deploy con Docker Compose (self-hosted)
+#   # ─────────────────────────────────────────────
+#   deploy:
+#     name: Deploy with Docker Compose
+#     runs-on: self-hosted
+#     needs: build
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Limpiar contenedores anteriores
+#         shell: powershell
+#         run: |
+#           $ErrorActionPreference = 'SilentlyContinue'
+#           docker rm -f tienda-tech-frontend 2>&1 | Out-Null
+#           docker rm -f tienda-tech-backend 2>&1 | Out-Null
+#           docker rm -f tienda-tech-db 2>&1 | Out-Null
+#           docker compose down --remove-orphans 2>&1 | Out-Null
+#           $LASTEXITCODE = 0
+#           exit 0
+
+#       - name: Build y levantar servicios
+#         shell: powershell
+#         run: docker compose up --build -d
+
+#       - name: Esperar a que los servicios inicien
+#         shell: powershell
+#         run: Start-Sleep -Seconds 25
+
+#       - name: Verificar contenedores en ejecución
+#         shell: powershell
+#         run: |
+#           docker compose ps
+#           docker compose logs backend
+#           docker compose logs frontend
+
+#       - name: Health check del backend
+#         shell: powershell
+#         run: |
+#           $response = $null
+#           try {
+#             $response = Invoke-WebRequest -Uri "http://localhost:3001/api/health" -UseBasicParsing
+#           } catch {
+#             Write-Host "❌ Health check falló"
+#             docker compose logs backend
+#             exit 1
+#           }
+#           if ($response.StatusCode -ne 200) {
+#             Write-Host "❌ Health check falló con status $($response.StatusCode)"
+#             docker compose logs backend
+#             exit 1
+#           }
+#           Write-Host "✅ Health check OK ."
