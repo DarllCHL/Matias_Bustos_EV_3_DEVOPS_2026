@@ -95,7 +95,7 @@ Pa mi este trabajo represento un desafio técnico bastante relevante ya que fue 
 
 ### Roberto González
 
-*(Espacio para reflexión personal: aprendizajes, dificultades enfrentadas y contribución individual al proyecto.)*
+Entendí mucho en cuanto a conexión y me quedo mas claro el tema de crear una instancia y poder interactuar con ella a nivel de seguridad y conexiones, es cierto que al inicio tuvimos muchos problemas de conectividad entre cuentas de GitHub ya que aprendimos que solo se pueden conectar las cuentas a las cuales el anfitrión envía la invitación (que fue el problema de conectividad que presentamos nosotros), gracias a esto pudimos darnos cuenta que el sistema es mas estricto y que es un sistema mas complejo que permite la ejecución y difusión de códigos a gran escala a nivel global.
 
 ---
 
