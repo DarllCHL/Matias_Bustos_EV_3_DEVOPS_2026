@@ -104,3 +104,4 @@ Pa mi este trabajo represento un desafio técnico bastante relevante ya que fue 
 Durante el desarrollo de esta extensión se utilizó Claude (Anthropic) como herramienta de apoyo para la configuración del agente de CloudWatch, la verificación de logs y métricas, el diseño y ejecución de la prueba de detención automática del pipeline (IE6), y la redacción de esta documentación. Las decisiones técnicas, la implementación y las validaciones fueron realizadas por los autores.
 
 Referencia de citación: https://bibliotecas.duoc.cl/ia
+
