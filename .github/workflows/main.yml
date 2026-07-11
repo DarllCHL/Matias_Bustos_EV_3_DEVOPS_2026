@@ -189,9 +189,9 @@ jobs:
       - name: Ejecutar comandos remotos en AWS por SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.AWS_EC2_HOST_MATIAS_BUSTOS }}
-          username: ${{ secrets.AWS_EC2_USER_MATIAS_BUSTOS }}
-          key: ${{ secrets.AWS_EC2_SSH_KEY_MATIAS_BUSTOS }}
+          host: ${{ secrets.AWS_EC2_HOST_ROBERTO_GONZALEZ }}
+          username: ${{ secrets.AWS_EC2_USER_ROBERTO_GONZALEZ }}
+          key: ${{ secrets.AWS_EC2_SSH_KEY_ROBERTO_GONZALEZ }}
           script: |
             # 1. Crear o moverse al directorio del proyecto en la instancia
             if [ ! -d "EVALUACION_DEVOPS_2026_2" ]; then
